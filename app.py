@@ -8,11 +8,11 @@ import os
 import json
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Union, Tuple
 from datetime import datetime
 
 import httpx
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -25,21 +25,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def get_env_var(name: str, required: bool = True) -> str:
+    """Get environment variable with validation"""
+    value = os.getenv(name)
+    if required and not value:
+        raise ValueError(f"Required environment variable {name} is not set")
+    return value or ""
+
+# Print environment variables for debugging (excluding sensitive values)
+logger.info("Environment variables present:")
+for key in os.environ:
+    if key.endswith('_KEY') or key.endswith('_TOKEN'):
+        logger.info(f"{key}: ***[HIDDEN]***")
+    else:
+        logger.info(f"{key}: {os.environ.get(key)}")
+
 # Configuration
 class Config:
     """Application configuration"""
-    ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
-    PHONE_NUMBER_ID = os.getenv('PHONE_NUMBER_ID')
-    VERIFY_TOKEN = os.getenv('VERIFY_TOKEN', '12345')
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-    OPENAI_ASSISTANT_ID = os.getenv('OPENAI_ASSISTANT_ID')
-    ASSISTANT_NAME = os.getenv('ASSISTANT_NAME', 'WhatsApp Assistant')
-    ASSISTANT_INSTRUCTIONS = os.getenv('ASSISTANT_INSTRUCTIONS', 'You are a helpful assistant.')
+    ACCESS_TOKEN = get_env_var('ACCESS_TOKEN')
+    PHONE_NUMBER_ID = get_env_var('PHONE_NUMBER_ID')
+    VERIFY_TOKEN = get_env_var('VERIFY_TOKEN', required=False) or '12345'
+    OPENAI_API_KEY = get_env_var('OPENAI_API_KEY')
+    OPENAI_ASSISTANT_ID = get_env_var('OPENAI_ASSISTANT_ID')
+    ASSISTANT_NAME = get_env_var('ASSISTANT_NAME', required=False) or 'WhatsApp Assistant'
+    ASSISTANT_INSTRUCTIONS = get_env_var('ASSISTANT_INSTRUCTIONS', required=False) or 'You are a helpful assistant.'
 
-# Validate required environment variables
-required_vars = ['ACCESS_TOKEN', 'PHONE_NUMBER_ID', 'OPENAI_API_KEY', 'OPENAI_ASSISTANT_ID']
-missing_vars = [var for var in required_vars if not getattr(Config, var)]
+# Required environment variables
+REQUIRED_VARS = [
+    'ACCESS_TOKEN',
+    'PHONE_NUMBER_ID',
+    'VERIFY_TOKEN',
+    'OPENAI_API_KEY',
+    'OPENAI_ASSISTANT_ID'
+]
+
+# Check for missing environment variables
+missing_vars = [var for var in REQUIRED_VARS if not os.getenv(var)]
 if missing_vars:
+    logger.error(f"Missing required environment variables: {missing_vars}")
     raise ValueError(f"Missing required environment variables: {missing_vars}")
 
 # In-memory storage for threads (replace with Redis in production)
